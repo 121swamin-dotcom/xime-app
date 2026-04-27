@@ -13,6 +13,7 @@ import competenciesRoutes  from './routes/competencies.routes.js';
 import counsellingRoutes   from './routes/counselling.routes.js';
 import mentoringRoutes     from './routes/mentoring.routes.js';
 import adminRoutes         from './routes/admin.routes.js';
+import analyticsRoutes     from './routes/analytics.routes.js';
 
 const app = express();
 
@@ -44,6 +45,7 @@ app.use('/api/competencies',  competenciesRoutes);
 app.use('/api/counselling',   counsellingRoutes);
 app.use('/api/mentoring',     mentoringRoutes);
 app.use('/api/admin',         adminRoutes);
+app.use('/api/analytics',     analyticsRoutes);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', env: process.env.NODE_ENV }));
