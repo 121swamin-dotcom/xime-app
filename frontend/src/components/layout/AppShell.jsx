@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, Briefcase, FileCheck,
   BarChart2, Calendar, Users, LogOut, Menu, X, Shield,
-  Award, TrendingUp, Star
+  Award, TrendingUp, Star, Building2, ArrowLeftRight
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 
@@ -11,10 +11,12 @@ const studentNav = [
   { to: '/dashboard',    label: 'Dashboard',        icon: LayoutDashboard },
   { to: '/courses',      label: 'Courses',           icon: BookOpen },
   { to: '/roles',        label: 'Roles',             icon: Briefcase },
+  { to: '/placements',   label: 'Placements',        icon: Building2 },
   { to: '/electives',    label: 'Electives',         icon: FileCheck },
   { to: '/competencies', label: 'Competencies',      icon: BarChart2 },
   { to: '/evidence',     label: 'Evidence Gallery',  icon: Award },
   { to: '/pathway',      label: 'Career Pathway',    icon: TrendingUp },
+  { to: '/compare',      label: 'Role Comparison',   icon: ArrowLeftRight },
   { to: '/peers',        label: 'Peer Benchmarking', icon: Star },
   { to: '/counselling',  label: 'Counselling',       icon: Calendar },
   { to: '/mentoring',    label: 'Mentoring',         icon: Users },

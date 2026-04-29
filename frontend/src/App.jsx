@@ -9,6 +9,9 @@ import ActivatePage         from './pages/ActivatePage.jsx';
 import ForgotPasswordPage   from './pages/ForgotPasswordPage.jsx';
 import ResetPasswordPage    from './pages/ResetPasswordPage.jsx';
 
+import PlacementsPage       from './pages/PlacementsPage.jsx';
+import RoleComparisonPage   from './pages/RoleComparisonPage.jsx';
+
 // Student pages
 import DashboardPage        from './pages/DashboardPage.jsx';
 import CoursesPage          from './pages/CoursesPage.jsx';
@@ -52,10 +55,12 @@ export default function App() {
             <Route path="/roles"        element={<RolesPage />} />
             <Route path="/roles/companies" element={<CompaniesPage />} />
             <Route path="/roles/:code"  element={<RoleCategoryPage />} />
+            <Route path="/placements"   element={<PlacementsPage />} />
             <Route path="/electives"    element={<ElectivesPage />} />
             <Route path="/competencies" element={<CompetenciesPage />} />
             <Route path="/evidence"     element={<EvidenceGalleryPage />} />
             <Route path="/pathway"      element={<CareerPathwayPage />} />
+            <Route path="/compare"      element={<RoleComparisonPage />} />
             <Route path="/peers"        element={<PeerBenchmarkingPage />} />
             <Route path="/counselling"  element={<CounsellingPage />} />
             <Route path="/mentoring"    element={<MentoringPage />} />

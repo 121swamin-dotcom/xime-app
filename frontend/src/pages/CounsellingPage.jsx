@@ -1,89 +1,172 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Calendar, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import PageHeader from '../components/shared/PageHeader.jsx';
 import { Alert, Spinner } from '../components/shared/FormComponents.jsx';
 import { useFetch } from '../hooks/useFetch.js';
 import { counsellingService } from '../services/admin.service.js';
-
-const SLOTS = ['09:00','09:30','10:00','10:30','11:00','11:30',
-               '12:00','12:30','13:00','13:30','14:00','14:30','15:00'];
+import { calendarService } from '../services/placements.service.js';
 
 const STATUS_ICON = {
   PENDING:   <AlertCircle size={14} className="text-amber-500" />,
   CONFIRMED: <CheckCircle size={14} className="text-green-500" />,
-  DECLINED:  <XCircle    size={14} className="text-red-500"   />,
+  DECLINED:  <XCircle    size={14} className="text-red-500" />,
 };
+
+const DAY_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 export default function CounsellingPage() {
   const { data: requests } = useFetch(counsellingService.getMy);
-  const [form, setForm]   = useState({ preferred_date: '', preferred_time: '', agenda: '' });
-  const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState('');
-  const [success, setSuccess] = useState('');
+  const { data: slots, loading: slotsLoading, error: slotsError } = useFetch(calendarService.getSlots);
+
+  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedTime, setSelectedTime] = useState('');
+  const [agenda, setAgenda]             = useState('');
+  const [saving, setSaving]             = useState(false);
+  const [error, setError]               = useState('');
+  const [success, setSuccess]           = useState('');
+
+  // Group slots by date
+  const slotsByDate = useMemo(() => {
+    if (!slots) return {};
+    return slots.reduce((acc, s) => {
+      if (!acc[s.date]) acc[s.date] = [];
+      acc[s.date].push(s);
+      return acc;
+    }, {});
+  }, [slots]);
+
+  const availableDates = Object.keys(slotsByDate).filter((d) =>
+    slotsByDate[d].some((s) => s.available)
+  );
+
+  const timesForDate = selectedDate ? slotsByDate[selectedDate] || [] : [];
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    if (!form.preferred_date || !form.preferred_time || !form.agenda) {
-      return setError('All fields are required.');
+    if (!selectedDate || !selectedTime || !agenda.trim()) {
+      return setError('Please select a date, time and enter your agenda.');
     }
     setSaving(true);
     try {
-      await counsellingService.request(form);
-      setSuccess('Request submitted. Prof Swaminathan will confirm via email.');
-      setForm({ preferred_date: '', preferred_time: '', agenda: '' });
+      await counsellingService.request({
+        preferred_date: selectedDate,
+        preferred_time: selectedTime,
+        agenda,
+      });
+      setSuccess('Request submitted. Prof Swaminathan will confirm shortly.');
+      setSelectedDate(''); setSelectedTime(''); setAgenda('');
     } catch (err) {
-      setError(err.response?.data?.error || 'Submission failed.');
+      setError(err.response?.data?.error || 'Submission failed. Please try again.');
     } finally {
       setSaving(false);
     }
   }
 
-  // Min date = tomorrow
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const minDate = tomorrow.toISOString().split('T')[0];
+  function formatDate(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' });
+  }
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <PageHeader title="Counselling" subtitle="Book a 30-minute one-on-one slot with Prof Swaminathan N." />
+      <PageHeader title="Counselling" subtitle="Book a 30-minute slot with Prof Swaminathan N." />
 
       <div className="grid md:grid-cols-2 gap-6">
-        {/* Request form */}
-        <div className="card p-5">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
-            <Calendar size={16} /> Request a Slot
-          </h3>
-          <Alert type="error"   message={error} />
-          <Alert type="success" message={success} />
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="label">Preferred Date</label>
-              <input type="date" min={minDate}
-                value={form.preferred_date}
-                onChange={(e) => setForm((f) => ({ ...f, preferred_date: e.target.value }))}
-                className="input-field" />
-              <p className="text-xs text-slate-400 mt-1">Weekdays only</p>
-            </div>
-            <div>
-              <label className="label">Preferred Time (IST)</label>
-              <select value={form.preferred_time}
-                onChange={(e) => setForm((f) => ({ ...f, preferred_time: e.target.value }))}
-                className="input-field">
-                <option value="">Select a slot…</option>
-                {SLOTS.map((s) => <option key={s} value={s}>{s} IST</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">Agenda</label>
-              <textarea value={form.agenda}
-                onChange={(e) => setForm((f) => ({ ...f, agenda: e.target.value }))}
-                rows={4} className="input-field resize-none"
-                placeholder="What would you like to discuss?" />
-            </div>
-            <button type="submit" disabled={saving}
-              className="btn-primary w-full flex items-center justify-center gap-2">
-              {saving ? <Spinner /> : <Clock size={16} />} Submit Request
+        {/* Booking form */}
+        <div>
+          <div className="card p-5 mb-4">
+            <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+              <Calendar size={16} className="text-[#CC0000]" /> Select a Date
+            </h3>
+
+            {slotsLoading && (
+              <div className="flex items-center gap-2 text-slate-400 text-sm py-4">
+                <Spinner /> Loading availability from calendar…
+              </div>
+            )}
+
+            {slotsError && (
+              <Alert type="info" message="Calendar unavailable — please select any weekday date manually below." />
+            )}
+
+            {!slotsLoading && availableDates.length === 0 && !slotsError && (
+              <p className="text-sm text-slate-400 py-2">No available slots in the next 2 weeks.</p>
+            )}
+
+            {/* Date grid */}
+            {!slotsLoading && availableDates.length > 0 && (
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                {availableDates.slice(0, 12).map((date) => {
+                  const d = new Date(date + 'T00:00:00');
+                  const freeCount = slotsByDate[date].filter((s) => s.available).length;
+                  const isSelected = selectedDate === date;
+                  return (
+                    <button key={date}
+                      onClick={() => { setSelectedDate(date); setSelectedTime(''); }}
+                      className={`p-2.5 rounded-xl border text-center transition-all
+                        ${isSelected
+                          ? 'border-[#CC0000] bg-red-50'
+                          : 'border-slate-200 hover:border-[#CC0000] hover:bg-red-50'}`}>
+                      <p className="text-[10px] text-slate-400 font-medium">{DAY_LABELS[d.getDay()]}</p>
+                      <p className={`text-sm font-bold mt-0.5 ${isSelected ? 'text-[#CC0000]' : 'text-slate-700'}`}>
+                        {d.getDate()}
+                      </p>
+                      <p className="text-[10px] text-green-600 font-medium mt-0.5">{freeCount} free</p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Time slots for selected date */}
+            {selectedDate && (
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                  Available Times — {formatDate(selectedDate)}
+                </p>
+                <div className="grid grid-cols-4 gap-2">
+                  {timesForDate.map((slot) => (
+                    <button key={slot.time}
+                      disabled={!slot.available}
+                      onClick={() => setSelectedTime(slot.time)}
+                      className={`py-1.5 px-2 rounded-lg text-xs font-medium border transition-all
+                        ${!slot.available
+                          ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
+                          : selectedTime === slot.time
+                          ? 'border-[#CC0000] bg-[#CC0000] text-white'
+                          : 'border-slate-200 text-slate-600 hover:border-[#CC0000] hover:text-[#CC0000]'}`}>
+                      {slot.time}
+                      {!slot.available && <span className="block text-[9px] text-slate-300">Busy</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Agenda + submit */}
+          <form onSubmit={handleSubmit} className="card p-5">
+            <Alert type="error"   message={error} />
+            <Alert type="success" message={success} />
+
+            {selectedDate && selectedTime && (
+              <div className="bg-red-50 border border-red-100 rounded-lg px-4 py-2.5 mb-4 flex items-center gap-2">
+                <Clock size={14} className="text-[#CC0000]" />
+                <span className="text-sm font-medium text-[#CC0000]">
+                  {formatDate(selectedDate)} at {selectedTime} IST
+                </span>
+              </div>
+            )}
+
+            <label className="label">Agenda</label>
+            <textarea value={agenda} onChange={(e) => setAgenda(e.target.value)}
+              rows={4} className="input-field resize-none mb-4"
+              placeholder="What would you like to discuss?" />
+
+            <button type="submit" disabled={saving || !selectedDate || !selectedTime}
+              className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-40">
+              {saving ? <><Spinner /> Submitting…</> : 'Submit Request'}
             </button>
           </form>
         </div>
@@ -110,9 +193,7 @@ export default function CounsellingPage() {
                         </p>
                         <p className="text-xs text-slate-400 mt-1 line-clamp-2">{r.agenda}</p>
                         {r.professor_comment && (
-                          <p className="text-xs text-slate-500 mt-1 italic">
-                            "{r.professor_comment}"
-                          </p>
+                          <p className="text-xs text-slate-500 mt-1 italic">"{r.professor_comment}"</p>
                         )}
                       </div>
                     </div>

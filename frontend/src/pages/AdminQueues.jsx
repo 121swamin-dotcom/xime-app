@@ -70,6 +70,15 @@ export function AdminEvidencePage() {
   const [done, setDone]       = useState({});
   const [ratings, setRatings] = useState({});
   const [comments, setComments] = useState({});
+  const [selected, setSelected] = useState([]);
+  const [batchRating, setBatchRating] = useState('');
+  const [batchProcessing, setBatchProcessing] = useState(false);
+
+  const pending = data?.filter((e) => !done[e.id]) || [];
+
+  function toggleSelect(id) {
+    setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
+  }
 
   async function handleApprove(id) {
     if (!ratings[id]) return;
@@ -77,9 +86,24 @@ export function AdminEvidencePage() {
     try {
       await adminService.approveEvidence(id, { confirmed_rating: ratings[id] });
       setDone((d) => ({ ...d, [id]: 'approved' }));
+      setSelected((s) => s.filter((x) => x !== id));
     } catch { /* silent */ } finally {
       setProcessing((p) => ({ ...p, [id]: false }));
     }
+  }
+
+  async function handleBatchApprove() {
+    if (!batchRating || !selected.length) return;
+    setBatchProcessing(true);
+    for (const id of selected) {
+      try {
+        await adminService.approveEvidence(id, { confirmed_rating: parseInt(batchRating) });
+        setDone((d) => ({ ...d, [id]: 'approved' }));
+      } catch { /* silent */ }
+    }
+    setSelected([]);
+    setBatchRating('');
+    setBatchProcessing(false);
   }
 
   async function handleReject(id) {
@@ -88,23 +112,53 @@ export function AdminEvidencePage() {
     try {
       await adminService.rejectEvidence(id, { professor_comment: comments[id] });
       setDone((d) => ({ ...d, [id]: 'rejected' }));
+      setSelected((s) => s.filter((x) => x !== id));
     } catch { /* silent */ } finally {
       setProcessing((p) => ({ ...p, [id]: false }));
     }
   }
 
   if (loading) return <QueueLoading title="Evidence Queue" />;
-  const pending = data?.filter((e) => !done[e.id]) || [];
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <PageHeader title="Evidence Queue" subtitle={`${pending.length} pending review`} />
+
+      {/* Batch approval bar */}
+      {selected.length > 0 && (
+        <div className="card p-4 mb-4 bg-red-50 border-red-200 flex items-center gap-4 flex-wrap">
+          <span className="text-sm font-medium text-[#CC0000]">{selected.length} selected</span>
+          <select value={batchRating} onChange={(e) => setBatchRating(e.target.value)}
+            className="input-field w-40 text-sm">
+            <option value="">Set rating…</option>
+            {[1,2,3,4,5].map((s) => (
+              <option key={s} value={s}>{s} — {['','Novice','Adv Beginner','Competent','Proficient','Expert'][s]}</option>
+            ))}
+          </select>
+          <button onClick={handleBatchApprove}
+            disabled={!batchRating || batchProcessing}
+            className="flex items-center gap-1.5 bg-green-600 text-white px-4 py-2 rounded-lg text-sm
+                       font-medium hover:bg-green-700 disabled:opacity-40 transition-colors">
+            {batchProcessing ? <Spinner /> : <CheckCircle size={14} />}
+            Approve All Selected
+          </button>
+          <button onClick={() => setSelected([])}
+            className="text-xs text-slate-500 hover:text-slate-700">Clear selection</button>
+        </div>
+      )}
+
       {pending.length === 0 && <EmptyQueue />}
       <div className="space-y-4">
         {pending.map((ev) => (
-          <div key={ev.id} className="card p-5">
-            <div className="flex items-start justify-between gap-2 mb-3">
-              <div>
+          <div key={ev.id} className={`card p-5 transition-all ${selected.includes(ev.id) ? 'border-[#CC0000] bg-red-50/30' : ''}`}>
+            <div className="flex items-start gap-3 mb-3">
+              {/* Checkbox */}
+              <button onClick={() => toggleSelect(ev.id)}
+                className={`w-5 h-5 rounded border-2 shrink-0 mt-0.5 flex items-center justify-center transition-colors
+                  ${selected.includes(ev.id) ? 'border-[#CC0000] bg-[#CC0000]' : 'border-slate-300'}`}>
+                {selected.includes(ev.id) && <CheckCircle size={12} className="text-white" />}
+              </button>
+              <div className="flex-1">
                 <p className="font-semibold text-slate-800">{ev.student_name}
                   <span className="font-mono text-xs text-slate-400 ml-2">{ev.roll_number}</span>
                 </p>
@@ -116,7 +170,7 @@ export function AdminEvidencePage() {
                 </p>
                 <p className="text-sm text-slate-500 mt-1">{ev.description}</p>
                 <a href={ev.evidence_link} target="_blank" rel="noreferrer"
-                  className="text-xs text-brand-500 hover:underline mt-1 block">
+                  className="text-xs text-[#CC0000] hover:underline mt-1 block">
                   View evidence →
                 </a>
               </div>
@@ -394,21 +448,43 @@ export function AdminStudentsPage() {
   const [search, setSearch] = useState('');
   const { data, loading }   = useFetch(() => adminService.getStudents(search), [search]);
 
+  function exportCSV() {
+    if (!data?.length) return;
+    const headers = ['Roll Number','Name','Section','Status','Primary Target','Electives','Approved Evidence'];
+    const rows = data.map((s) => [
+      s.roll_number, s.name, s.section, s.status,
+      s.primary_description || 'Not set',
+      s.elective_count, s.approved_evidence,
+    ]);
+    const csv = [headers, ...rows].map((r) => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'xime_students.csv'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <PageHeader title="Student Search" subtitle="Search by name or roll number" />
-      <div className="relative mb-6 max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input value={query} onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && setSearch(query)}
-          placeholder="Name or roll number… (press Enter)"
-          className="input-field pl-9" />
+      <div className="flex gap-3 mb-6 flex-wrap">
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && setSearch(query)}
+            placeholder="Name or roll number… (press Enter)"
+            className="input-field pl-9 w-64" />
+        </div>
+        <button onClick={exportCSV} disabled={!data?.length}
+          className="flex items-center gap-2 btn-secondary text-sm disabled:opacity-40">
+          ↓ Export CSV
+        </button>
       </div>
       {loading && <div className="text-slate-400 text-sm">Searching…</div>}
       <div className="space-y-2">
         {data?.map((s) => (
           <button key={s.id} onClick={() => navigate(`/admin/students/${s.id}`)}
-            className="card p-4 w-full text-left hover:border-brand-500 hover:shadow-sm transition-all group">
+            className="card p-4 w-full text-left hover:border-[#CC0000] hover:shadow-sm transition-all group">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="font-semibold text-slate-800">{s.name}
